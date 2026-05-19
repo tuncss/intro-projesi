@@ -91,14 +91,20 @@ def main() -> None:
             if same_dst >= cfg.dos_syn_threshold * cfg.dos_same_dst_ratio:
                 return "DOS", 0.99, "behavior"
 
-        # ---- BRUTE_FORCE: many *established* flows to (dst, brute-port) ----
-        # Established = real TCP handshake + payload exchange on both sides.
-        # This excludes SYN floods (1-2 packets, mostly one-direction) which
-        # would otherwise be mislabeled as brute force on port 22.
-        if dst_port in cfg.brute_ports and len(flow.packets) <= 60:
+        # ---- BRUTE_FORCE: established + payload-bearing flows to a brute port ----
+        # Discriminator vs SYN flood: real KEX/auth produces packets with payload
+        # >200B (banner, key exchange). SYN flood packets are all ~40-60B.
+        # No upper bound on flow size - Hydra reuses one TCP connection for
+        # multiple auth attempts (OpenSSH MaxAuthTries), inflating packet count.
+        if dst_port in cfg.brute_ports:
             fwd_count = sum(1 for p in flow.packets if p.direction == "fwd")
             bwd_count = sum(1 for p in flow.packets if p.direction == "bwd")
-            if fwd_count >= cfg.brute_min_fwd and bwd_count >= cfg.brute_min_bwd:
+            has_payload = any(p.length > cfg.brute_min_payload for p in flow.packets)
+            if (
+                fwd_count >= cfg.brute_min_fwd
+                and bwd_count >= cfg.brute_min_bwd
+                and has_payload
+            ):
                 bk = (src_ip, dst_ip, dst_port)
                 bq = brute_events[bk]
                 bq.append(now)

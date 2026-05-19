@@ -37,11 +37,14 @@ class Config:
     dos_syn_threshold: int = 60
     dos_same_dst_ratio: float = 0.7
     # Brute force: many *established* flows from one src to one (dst, dst_port)
-    # An "established" flow has bidirectional traffic - pure SYN floods do not.
-    brute_window: float = 15.0
-    brute_flow_threshold: int = 5
+    # An "established" flow has bidirectional traffic AND real payload -
+    # excludes SYN floods (no payload) and stays decoupled from packet count
+    # (Hydra reuses TCP connections via MaxAuthTries, producing 60-150 packets/flow).
+    brute_window: float = 30.0
+    brute_flow_threshold: int = 3
     brute_min_fwd: int = 3
     brute_min_bwd: int = 3
+    brute_min_payload: int = 200  # any one packet > this many bytes means real KEX/auth
     brute_ports: tuple[int, ...] = (22, 21, 23, 3389)
 
 
