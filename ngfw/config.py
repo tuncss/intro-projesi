@@ -10,7 +10,7 @@ class Config:
     # Flow timeouts (seconds)
     flow_idle_timeout: float = 2.0
     flow_active_timeout: float = 120.0
-    # Short idle timeout for tiny/scan-like flows (≤ short_flow_max_packets)
+    # Short idle timeout for tiny/scan-like flows (<= short_flow_max_packets)
     flow_idle_timeout_short: float = 0.4
     short_flow_max_packets: int = 3
     # Classifier
@@ -27,18 +27,21 @@ class Config:
     flask_port: int = 5000
     # Outbound allowlist (skip blocking on these dst ports from firewall VM itself)
     outbound_safe_ports: tuple[int, ...] = (80, 443, 53)
-    # Behavior layer — only applied to traffic inside this subnet (avoids NAT FPs)
+    # Behavior layer - only applied to traffic inside this subnet (avoids NAT FPs)
     lab_subnet: str = "192.168.56.0/24"
     # Port scan: unique dst ports per (src,dst) within window
     port_scan_window: float = 10.0
     port_scan_unique_ports: int = 15
     # DOS: aggregated SYNs from one src_ip toward one dst_ip within window
     dos_window: float = 5.0
-    dos_syn_threshold: int = 150
+    dos_syn_threshold: int = 60
     dos_same_dst_ratio: float = 0.7
-    # Brute force: many short flows from one src to one (dst, dst_port) within window
+    # Brute force: many *established* flows from one src to one (dst, dst_port)
+    # An "established" flow has bidirectional traffic - pure SYN floods do not.
     brute_window: float = 15.0
-    brute_flow_threshold: int = 10
+    brute_flow_threshold: int = 5
+    brute_min_fwd: int = 3
+    brute_min_bwd: int = 3
     brute_ports: tuple[int, ...] = (22, 21, 23, 3389)
 
 

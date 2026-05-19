@@ -41,7 +41,7 @@ def main() -> None:
 
     threading.excepthook = sniffer_excepthook
 
-    # Behavior layer state — aggregated across flows, keyed by src_ip
+    # Behavior layer state - aggregated across flows, keyed by src_ip
     lab_net = ipaddress.ip_network(cfg.lab_subnet)
 
     def in_lab(ip: str) -> bool:
@@ -80,7 +80,7 @@ def main() -> None:
             return "PORT_SCAN", 0.99, "behavior"
 
         # ---- DOS: aggregate SYNs per src_ip across flows within window ----
-        # hping3 random-port SYN flood produces one SYN per flow → must aggregate.
+        # hping3 random-port SYN flood produces one SYN per flow, so aggregate.
         syn_q = syn_events[src_ip]
         for _ in range(syn_count):
             syn_q.append((now, dst_ip))
@@ -91,15 +91,21 @@ def main() -> None:
             if same_dst >= cfg.dos_syn_threshold * cfg.dos_same_dst_ratio:
                 return "DOS", 0.99, "behavior"
 
-        # ---- BRUTE_FORCE: many short flows to same (dst, brute-port) within window ----
-        if dst_port in cfg.brute_ports and len(flow.packets) <= 30:
-            bk = (src_ip, dst_ip, dst_port)
-            bq = brute_events[bk]
-            bq.append(now)
-            while bq and now - bq[0] > cfg.brute_window:
-                bq.popleft()
-            if len(bq) >= cfg.brute_flow_threshold:
-                return "BRUTE_FORCE", 0.95, "behavior"
+        # ---- BRUTE_FORCE: many *established* flows to (dst, brute-port) ----
+        # Established = real TCP handshake + payload exchange on both sides.
+        # This excludes SYN floods (1-2 packets, mostly one-direction) which
+        # would otherwise be mislabeled as brute force on port 22.
+        if dst_port in cfg.brute_ports and len(flow.packets) <= 60:
+            fwd_count = sum(1 for p in flow.packets if p.direction == "fwd")
+            bwd_count = sum(1 for p in flow.packets if p.direction == "bwd")
+            if fwd_count >= cfg.brute_min_fwd and bwd_count >= cfg.brute_min_bwd:
+                bk = (src_ip, dst_ip, dst_port)
+                bq = brute_events[bk]
+                bq.append(now)
+                while bq and now - bq[0] > cfg.brute_window:
+                    bq.popleft()
+                if len(bq) >= cfg.brute_flow_threshold:
+                    return "BRUTE_FORCE", 0.95, "behavior"
 
         return label, conf, "ml"
 
