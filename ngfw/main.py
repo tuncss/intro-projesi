@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 import threading
 import time
@@ -13,11 +14,6 @@ from ngfw.sniffer import Sniffer
 
 
 log = logging.getLogger("ngfw")
-
-PORT_SCAN_WINDOW = 10.0
-PORT_SCAN_UNIQUE_PORTS = 20
-DOS_SYN_COUNT = 100
-DOS_SYN_RATE = 100.0
 
 
 def main() -> None:
@@ -44,26 +40,66 @@ def main() -> None:
         threading.__excepthook__(args)
 
     threading.excepthook = sniffer_excepthook
+
+    # Behavior layer state — aggregated across flows, keyed by src_ip
+    lab_net = ipaddress.ip_network(cfg.lab_subnet)
+
+    def in_lab(ip: str) -> bool:
+        try:
+            return ipaddress.ip_address(ip) in lab_net
+        except ValueError:
+            return False
+
+    # (src_ip, dst_ip) -> deque[(ts, dst_port)]  for PORT_SCAN
     port_scan_windows: dict[tuple[str, str], deque[tuple[float, int]]] = defaultdict(deque)
+    # src_ip -> deque[(ts, dst_ip)]              for DOS  (each entry = one SYN seen)
+    syn_events: dict[str, deque[tuple[float, str]]] = defaultdict(deque)
+    # (src_ip, dst_ip, dst_port) -> deque[ts]    for BRUTE_FORCE  (each entry = one closed flow)
+    brute_events: dict[tuple[str, str, int], deque[float]] = defaultdict(deque)
 
     def behavior_override(flow: Flow, label: str, conf: float) -> tuple[str, float, str]:
+        src_ip, dst_ip, _src_port, dst_port, proto = flow.key
+
+        # Gate: only override on lab-internal traffic. NAT/internet stays ML-only,
+        # which prevents normal browsing from being labeled DOS.
+        if not (in_lab(src_ip) and in_lab(dst_ip)):
+            return label, conf, "ml"
+        if proto != "TCP":
+            return label, conf, "ml"
+
         now = time.time()
         syn_count = sum(1 for pkt in flow.packets if pkt.tcp_flags & 0x02)
-        duration = max(flow.last_ts - flow.start_ts, 1e-6)
-        syn_rate = syn_count / duration
 
-        if flow.key[4] == "TCP" and (syn_count >= DOS_SYN_COUNT or syn_rate >= DOS_SYN_RATE):
-            return "DOS", 0.99, "behavior"
+        # ---- PORT_SCAN: unique dst ports from src_ip to dst_ip within window ----
+        ps_window = port_scan_windows[(src_ip, dst_ip)]
+        ps_window.append((now, dst_port))
+        while ps_window and now - ps_window[0][0] > cfg.port_scan_window:
+            ps_window.popleft()
+        unique_ports = {p for _t, p in ps_window}
+        if len(unique_ports) >= cfg.port_scan_unique_ports:
+            return "PORT_SCAN", 0.99, "behavior"
 
-        src_ip, dst_ip, _src_port, dst_port, proto = flow.key
-        if proto == "TCP":
-            window_key = (src_ip, dst_ip)
-            window = port_scan_windows[window_key]
-            window.append((now, dst_port))
-            while window and now - window[0][0] > PORT_SCAN_WINDOW:
-                window.popleft()
-            if len({port for _ts, port in window}) >= PORT_SCAN_UNIQUE_PORTS:
-                return "PORT_SCAN", 0.99, "behavior"
+        # ---- DOS: aggregate SYNs per src_ip across flows within window ----
+        # hping3 random-port SYN flood produces one SYN per flow → must aggregate.
+        syn_q = syn_events[src_ip]
+        for _ in range(syn_count):
+            syn_q.append((now, dst_ip))
+        while syn_q and now - syn_q[0][0] > cfg.dos_window:
+            syn_q.popleft()
+        if len(syn_q) >= cfg.dos_syn_threshold:
+            same_dst = sum(1 for _t, d in syn_q if d == dst_ip)
+            if same_dst >= cfg.dos_syn_threshold * cfg.dos_same_dst_ratio:
+                return "DOS", 0.99, "behavior"
+
+        # ---- BRUTE_FORCE: many short flows to same (dst, brute-port) within window ----
+        if dst_port in cfg.brute_ports and len(flow.packets) <= 30:
+            bk = (src_ip, dst_ip, dst_port)
+            bq = brute_events[bk]
+            bq.append(now)
+            while bq and now - bq[0] > cfg.brute_window:
+                bq.popleft()
+            if len(bq) >= cfg.brute_flow_threshold:
+                return "BRUTE_FORCE", 0.95, "behavior"
 
         return label, conf, "ml"
 

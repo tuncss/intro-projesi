@@ -24,6 +24,19 @@ class Config:
     flask_port: int = 5000
     # Outbound allowlist (skip blocking on these dst ports from firewall VM itself)
     outbound_safe_ports: tuple[int, ...] = (80, 443, 53)
+    # Behavior layer — only applied to traffic inside this subnet (avoids NAT FPs)
+    lab_subnet: str = "192.168.56.0/24"
+    # Port scan: unique dst ports per (src,dst) within window
+    port_scan_window: float = 10.0
+    port_scan_unique_ports: int = 15
+    # DOS: aggregated SYNs from one src_ip toward one dst_ip within window
+    dos_window: float = 5.0
+    dos_syn_threshold: int = 150
+    dos_same_dst_ratio: float = 0.7
+    # Brute force: many short flows from one src to one (dst, dst_port) within window
+    brute_window: float = 15.0
+    brute_flow_threshold: int = 10
+    brute_ports: tuple[int, ...] = (22, 21, 23, 3389)
 
 
 def load_config() -> Config:
