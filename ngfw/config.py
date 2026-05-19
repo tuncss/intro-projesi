@@ -8,7 +8,7 @@ class Config:
     # NICs to sniff (comma-separated env override)
     interfaces: tuple[str, ...] = ("eth0", "eth1")
     # Flow timeouts (seconds)
-    flow_idle_timeout: float = 10.0
+    flow_idle_timeout: float = 2.0
     flow_active_timeout: float = 120.0
     # Classifier
     confidence_threshold: float = 0.85
@@ -30,6 +30,8 @@ def load_config() -> Config:
     kwargs = {}
     if v := os.getenv("NGFW_INTERFACES"):
         kwargs["interfaces"] = tuple(v.split(","))
+    if v := os.getenv("NGFW_IDLE_TIMEOUT"):
+        kwargs["flow_idle_timeout"] = float(v)
     if v := os.getenv("NGFW_ACTIVE_TIMEOUT"):
         kwargs["flow_active_timeout"] = float(v)
     if v := os.getenv("NGFW_CONFIDENCE"):

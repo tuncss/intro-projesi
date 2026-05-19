@@ -99,12 +99,12 @@ def main() -> None:
         last_sweep = time.time()
         while True:
             try:
-                pkt = pkt_q.get(timeout=1.0)
+                pkt = pkt_q.get(timeout=0.25)
                 flow_builder.add_packet(pkt)
             except Exception:
                 pass
             now = time.time()
-            if now - last_sweep >= 1.0:
+            if now - last_sweep >= 0.25:
                 flow_builder.sweep_timeouts(now)
                 last_sweep = now
 
