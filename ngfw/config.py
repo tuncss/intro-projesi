@@ -10,6 +10,9 @@ class Config:
     # Flow timeouts (seconds)
     flow_idle_timeout: float = 2.0
     flow_active_timeout: float = 120.0
+    # Short idle timeout for tiny/scan-like flows (≤ short_flow_max_packets)
+    flow_idle_timeout_short: float = 0.4
+    short_flow_max_packets: int = 3
     # Classifier
     confidence_threshold: float = 0.85
     model_path: Path = Path("models/rf_model.pkl")
@@ -45,6 +48,8 @@ def load_config() -> Config:
         kwargs["interfaces"] = tuple(v.split(","))
     if v := os.getenv("NGFW_IDLE_TIMEOUT"):
         kwargs["flow_idle_timeout"] = float(v)
+    if v := os.getenv("NGFW_IDLE_TIMEOUT_SHORT"):
+        kwargs["flow_idle_timeout_short"] = float(v)
     if v := os.getenv("NGFW_ACTIVE_TIMEOUT"):
         kwargs["flow_active_timeout"] = float(v)
     if v := os.getenv("NGFW_CONFIDENCE"):

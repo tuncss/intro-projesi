@@ -78,7 +78,7 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
             try:
                 evt = q.get_nowait()
             except queue.Empty:
-                socketio.sleep(0.1)
+                socketio.sleep(0.02)
                 continue
             with state_lock:
                 state["total_flows"] += 1
@@ -89,6 +89,7 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
                     state["threats"] += 1
                 state["recent"].appendleft(evt)
             socketio.emit("flow", evt)
+            socketio.sleep(0)  # yield to hub between events so emits flush
 
     def action_pump():
         q = bus.subscribe("action")
@@ -96,9 +97,10 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
             try:
                 evt = q.get_nowait()
             except queue.Empty:
-                socketio.sleep(0.1)
+                socketio.sleep(0.02)
                 continue
             socketio.emit("alert", evt)
+            socketio.sleep(0)
 
     def metrics_tick():
         while True:

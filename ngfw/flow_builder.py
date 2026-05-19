@@ -78,7 +78,14 @@ class FlowBuilder:
             flow = self.flows[key]
             if now - flow.start_ts >= self.cfg.flow_active_timeout:
                 self._close(key, "ACTIVE")
-            elif now - flow.last_ts >= self.cfg.flow_idle_timeout:
+                continue
+            # Scan/flood probes are tiny (1-3 packets) and stale fast.
+            # Established sessions keep the full idle window.
+            if len(flow.packets) <= self.cfg.short_flow_max_packets:
+                idle = self.cfg.flow_idle_timeout_short
+            else:
+                idle = self.cfg.flow_idle_timeout
+            if now - flow.last_ts >= idle:
                 self._close(key, "IDLE")
 
     def _close(self, key: tuple, reason: str) -> None:
