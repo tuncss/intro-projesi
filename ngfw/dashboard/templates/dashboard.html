@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mini NGFW Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <header class="border-b border-slate-800 bg-slate-950/95">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div>
+          <h1 class="text-xl font-semibold tracking-normal">Mini NGFW</h1>
+          <div class="mt-1 flex items-center gap-3 text-sm text-slate-400">
+            <span id="statusBadge" class="status-dot offline">offline</span>
+            <span>Uptime <span id="uptime">0s</span></span>
+          </div>
+        </div>
+        <button id="resetBtn" class="rounded bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">
+          Reset Demo
+        </button>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-4 py-5">
+      <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="metric"><span>Total Flows</span><strong id="totalFlows">0</strong></div>
+        <div class="metric"><span>Benign</span><strong id="benignFlows">0</strong></div>
+        <div class="metric"><span>Threats</span><strong id="threatFlows">0</strong></div>
+        <div class="metric"><span>Blocked IPs</span><strong id="blockedCount">0</strong></div>
+      </section>
+
+      <section class="mt-5 grid gap-5 lg:grid-cols-5">
+        <div class="lg:col-span-3">
+          <div class="section-head">
+            <h2>Live Flow Stream</h2>
+            <span id="flowCountHint">0 rows</span>
+          </div>
+          <div class="overflow-hidden border border-slate-800">
+            <table class="w-full table-fixed text-left text-sm">
+              <thead class="bg-slate-900 text-xs uppercase text-slate-400">
+                <tr>
+                  <th class="w-24 px-3 py-3">time</th>
+                  <th class="w-24 px-3 py-3">iface</th>
+                  <th class="px-3 py-3">src -> dst:port</th>
+                  <th class="w-28 px-3 py-3">class</th>
+                  <th class="w-20 px-3 py-3">conf</th>
+                </tr>
+              </thead>
+              <tbody id="flowTable" class="divide-y divide-slate-800 bg-slate-950"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="grid gap-5 lg:col-span-2">
+          <div>
+            <div class="section-head"><h2>Threat Breakdown</h2></div>
+            <div class="chart-box"><canvas id="classChart"></canvas></div>
+          </div>
+          <div>
+            <div class="section-head"><h2>Blocked IPs</h2></div>
+            <div id="blockedList" class="space-y-2"></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="mt-5">
+        <div class="section-head"><h2>Traffic Rate</h2></div>
+        <div class="chart-box h-64"><canvas id="rateChart"></canvas></div>
+      </section>
+    </main>
+
+    <div id="toastHost" class="fixed right-4 top-4 z-50 space-y-2"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

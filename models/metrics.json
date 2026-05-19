@@ -1,0 +1,117 @@
+{
+  "labels": [
+    "BENIGN",
+    "PORT_SCAN",
+    "DOS",
+    "BRUTE_FORCE"
+  ],
+  "features": [
+    "Flow Duration",
+    "Total Fwd Packets",
+    "Total Backward Packets",
+    "Total Length of Fwd Packets",
+    "Total Length of Bwd Packets",
+    "Fwd Packet Length Mean",
+    "Bwd Packet Length Mean",
+    "Flow IAT Mean",
+    "SYN Flag Count",
+    "ACK Flag Count",
+    "RST Flag Count",
+    "Average Packet Size",
+    "Fwd Packets/s",
+    "Bwd Packets/s",
+    "Down/Up Ratio"
+  ],
+  "macro_f1": 0.9389577113739324,
+  "per_class": {
+    "BENIGN": {
+      "precision": 0.9935421205995852,
+      "recall": 0.946175,
+      "f1-score": 0.9692802171769557,
+      "support": 40000
+    },
+    "PORT_SCAN": {
+      "precision": 0.9990881076661845,
+      "recall": 0.9995910149122255,
+      "f1-score": 0.9993394980184941,
+      "support": 31786
+    },
+    "DOS": {
+      "precision": 0.9849484253586738,
+      "recall": 0.9958245107157699,
+      "f1-score": 0.9903566086751161,
+      "support": 50533
+    },
+    "BRUTE_FORCE": {
+      "precision": 0.6673170731707317,
+      "recall": 0.9887965305384894,
+      "f1-score": 0.7968545216251638,
+      "support": 2767
+    }
+  },
+  "confusion_matrix": [
+    [
+      37847,
+      28,
+      762,
+      1363
+    ],
+    [
+      5,
+      31773,
+      7,
+      1
+    ],
+    [
+      210,
+      1,
+      50322,
+      0
+    ],
+    [
+      31,
+      0,
+      0,
+      2736
+    ]
+  ],
+  "classification_report": {
+    "BENIGN": {
+      "precision": 0.9935421205995852,
+      "recall": 0.946175,
+      "f1-score": 0.9692802171769557,
+      "support": 40000.0
+    },
+    "PORT_SCAN": {
+      "precision": 0.9990881076661845,
+      "recall": 0.9995910149122255,
+      "f1-score": 0.9993394980184941,
+      "support": 31786.0
+    },
+    "DOS": {
+      "precision": 0.9849484253586738,
+      "recall": 0.9958245107157699,
+      "f1-score": 0.9903566086751161,
+      "support": 50533.0
+    },
+    "BRUTE_FORCE": {
+      "precision": 0.6673170731707317,
+      "recall": 0.9887965305384894,
+      "f1-score": 0.7968545216251638,
+      "support": 2767.0
+    },
+    "accuracy": 0.9807492445197704,
+    "macro avg": {
+      "precision": 0.9112239316987939,
+      "recall": 0.9825967640416212,
+      "f1-score": 0.9389577113739324,
+      "support": 125086.0
+    },
+    "weighted avg": {
+      "precision": 0.9842633430949428,
+      "recall": 0.9807492445197704,
+      "f1-score": 0.9816190536000077,
+      "support": 125086.0
+    }
+  }
+}

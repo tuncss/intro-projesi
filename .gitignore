@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+data/
+*.pcap
+*.pcapng
+models/*.pkl
+notebooks/docs/
+notebooks/models/
+docs/report/*.pdf
+docs/presentation/*.pdf
+.ipynb_checkpoints/
+node_modules/
