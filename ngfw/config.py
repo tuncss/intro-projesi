@@ -29,6 +29,9 @@ class Config:
     outbound_safe_ports: tuple[int, ...] = (80, 443, 53)
     # Behavior layer - only applied to traffic inside this subnet (avoids NAT FPs)
     lab_subnet: str = "192.168.56.0/24"
+    # Never block or behavior-override traffic originating from these IPs.
+    # Local interface IPs are auto-detected at startup and merged with this list.
+    protected_ips: tuple[str, ...] = ()
     # Port scan: unique dst ports per (src,dst) within window
     port_scan_window: float = 10.0
     port_scan_unique_ports: int = 15

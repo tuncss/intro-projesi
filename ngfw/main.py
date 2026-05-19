@@ -1,5 +1,6 @@
 import ipaddress
 import logging
+import subprocess
 import threading
 import time
 from collections import defaultdict, deque
@@ -14,6 +15,36 @@ from ngfw.sniffer import Sniffer
 
 
 log = logging.getLogger("ngfw")
+
+# TCP flag bits. A pure SYN (connection-attempt) has SYN=1, ACK=0.
+# SYN-ACK responses (0x12) must NOT be counted as attack SYNs.
+SYN_ACK_MASK = 0x12
+SYN_ONLY_VAL = 0x02
+
+
+def _gather_local_ips() -> set[str]:
+    """Return IPv4 addresses bound to any local interface (excludes loopback)."""
+    ips: set[str] = set()
+    try:
+        res = subprocess.run(
+            ["ip", "-o", "-4", "addr"],
+            capture_output=True, text=True, check=False, timeout=2.0,
+        )
+    except Exception as exc:
+        log.warning("Could not enumerate local IPs: %s", exc)
+        return ips
+    if res.returncode != 0:
+        return ips
+    for line in res.stdout.splitlines():
+        parts = line.split()
+        try:
+            idx = parts.index("inet")
+            ip = parts[idx + 1].split("/")[0]
+        except (ValueError, IndexError):
+            continue
+        if ip and not ip.startswith("127."):
+            ips.add(ip)
+    return ips
 
 
 def main() -> None:
@@ -44,6 +75,12 @@ def main() -> None:
     # Behavior layer state - aggregated across flows, keyed by src_ip
     lab_net = ipaddress.ip_network(cfg.lab_subnet)
 
+    # Self-block prevention. Includes every IP bound to a local interface
+    # (so the firewall never blocks itself when sniffing captures its own
+    # SYN-ACK responses) plus any IPs the operator explicitly protects.
+    local_ips: set[str] = _gather_local_ips() | set(cfg.protected_ips)
+    log.info("Protected IPs (will never be blocked): %s", sorted(local_ips))
+
     def in_lab(ip: str) -> bool:
         try:
             return ipaddress.ip_address(ip) in lab_net
@@ -64,11 +101,22 @@ def main() -> None:
         # which prevents normal browsing from being labeled DOS.
         if not (in_lab(src_ip) and in_lab(dst_ip)):
             return label, conf, "ml"
+        # Never behavior-override flows where WE are the source. Scapy can capture
+        # our own SYN-ACK responses (when it missed the original SYN), creating
+        # flows keyed by our IP toward random ephemeral ports; that pattern
+        # otherwise looks like a fan-out scan from the firewall itself.
+        if src_ip in local_ips:
+            return label, conf, "ml"
         if proto != "TCP":
             return label, conf, "ml"
 
         now = time.time()
-        syn_count = sum(1 for pkt in flow.packets if pkt.tcp_flags & 0x02)
+        # Count only SYN-only packets (connection attempts). SYN-ACK (0x12) is a
+        # response and must NOT inflate attack counters.
+        syn_count = sum(
+            1 for pkt in flow.packets
+            if (pkt.tcp_flags & SYN_ACK_MASK) == SYN_ONLY_VAL
+        )
 
         # ---- PORT_SCAN: unique dst ports from src_ip to dst_ip within window ----
         ps_window = port_scan_windows[(src_ip, dst_ip)]
@@ -135,6 +183,10 @@ def main() -> None:
         }
         bus.publish("classified", event)
         if label != "BENIGN" and conf >= cfg.confidence_threshold:
+            # Hard self-block guard: never block any IP bound to this host,
+            # regardless of what label (ML or behavior) was assigned.
+            if flow.key[0] in local_ips:
+                return
             # Don't block our own outbound safe-port traffic on low-context ML hits.
             if source == "ml" and flow.key[3] in cfg.outbound_safe_ports:
                 return
