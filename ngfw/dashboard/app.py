@@ -60,9 +60,9 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
 
     @app.route("/api/reset", methods=["POST"])
     def reset():
-        # Unblock all + zero counters; do NOT flush other iptables rules.
-        for entry in action.list_blocks():
-            action.unblock(entry.ip)
+        # Reset wipes in-memory state AND every NGFW-managed iptables rule
+        # (matched by comment tag, so unrelated rules are untouched).
+        removed = action.reset_all()
         with state_lock:
             state["total_flows"] = 0
             state["benign"] = 0
@@ -70,7 +70,7 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
             for key in state["per_class"]:
                 state["per_class"][key] = 0
             state["recent"].clear()
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "iptables_rules_removed": removed})
 
     def classified_pump():
         q = bus.subscribe("classified")
