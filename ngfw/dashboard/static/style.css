@@ -5,6 +5,12 @@
 .section-head h2 { font-size: 15px; font-weight: 700; }
 .section-head span, .empty { color: #94a3b8; font-size: 12px; }
 .chart-box { height: 260px; border: 1px solid #1e293b; background: #0f172a; padding: 12px; }
+.flow-panel { max-height: min(68vh, 760px); background: #020617; }
+.flow-panel thead { position: sticky; top: 0; z-index: 1; }
+
+@media (min-width: 1024px) {
+  .side-panel { align-self: start; position: sticky; top: 16px; }
+}
 
 tbody tr:hover {
   background: #111827;
