@@ -21,7 +21,7 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
         "benign": 0,
         "threats": 0,
         "per_class": {label: 0 for label in cfg.labels},
-        "recent": deque(maxlen=50),
+        "recent": deque(maxlen=100),
     }
     state_lock = threading.Lock()
 
@@ -73,23 +73,43 @@ def create_app(cfg: Config, bus: EventBus, action: ActionEngine):
         return jsonify({"ok": True, "iptables_rules_removed": removed})
 
     def classified_pump():
+        """Drain the classified queue and emit events in mini-batches.
+
+        Per-event emit at high flow rates saturates the SocketIO hub (~1ms
+        per emit). Batching keeps the on-wire format compact and lets the
+        frontend coalesce DOM updates via requestAnimationFrame.
+        """
         q = bus.subscribe("classified")
+        batch_max = 100
+        flush_every = 0.05  # 50ms
+        last_flush = time.time()
+        batch: list[dict] = []
         while True:
             try:
                 evt = q.get_nowait()
             except queue.Empty:
+                evt = None
+            if evt is not None:
+                with state_lock:
+                    state["total_flows"] += 1
+                    state["per_class"][evt["label"]] = state["per_class"].get(evt["label"], 0) + 1
+                    if evt["label"] == "BENIGN":
+                        state["benign"] += 1
+                    else:
+                        state["threats"] += 1
+                    state["recent"].appendleft(evt)
+                batch.append(evt)
+            now = time.time()
+            should_flush = batch and (
+                len(batch) >= batch_max or now - last_flush >= flush_every
+            )
+            if should_flush:
+                socketio.emit("flows", batch)
+                batch = []
+                last_flush = now
+                socketio.sleep(0)
+            elif evt is None:
                 socketio.sleep(0.02)
-                continue
-            with state_lock:
-                state["total_flows"] += 1
-                state["per_class"][evt["label"]] = state["per_class"].get(evt["label"], 0) + 1
-                if evt["label"] == "BENIGN":
-                    state["benign"] += 1
-                else:
-                    state["threats"] += 1
-                state["recent"].appendleft(evt)
-            socketio.emit("flow", evt)
-            socketio.sleep(0)  # yield to hub between events so emits flush
 
     def action_pump():
         q = bus.subscribe("action")

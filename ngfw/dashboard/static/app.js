@@ -85,9 +85,30 @@ function flowRow(evt) {
   </tr>`;
 }
 
+const MAX_FLOWS = 100;
+let renderQueued = false;
+
 function renderFlows() {
   el.flowTable.innerHTML = state.flows.map(flowRow).join("");
   el.flowHint.textContent = `${state.flows.length} rows`;
+}
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderFlows();
+  });
+}
+
+function ingestFlows(batch) {
+  // Backend sends events in arrival order; newest is last in batch.
+  // Reverse-prepend so newest sits at the top, then cap.
+  const incoming = batch.slice().reverse();
+  state.flows = incoming.concat(state.flows);
+  if (state.flows.length > MAX_FLOWS) state.flows.length = MAX_FLOWS;
+  scheduleRender();
 }
 
 function renderBlocks(blocks) {
@@ -101,7 +122,7 @@ function renderBlocks(blocks) {
   el.blockedList.innerHTML = state.blocks.map((b) => {
     const left = Math.max(0, Math.ceil((b.expires_at || now) - now));
     return `<div class="block-item">
-      <div class="min-w-0"><div class="font-mono text-sm">${b.ip}</div><div class="truncate text-xs text-slate-400">${b.reason || ""} · ${left}s</div></div>
+      <div class="min-w-0"><div class="font-mono text-sm">${b.ip}</div><div class="truncate text-xs text-slate-400">${b.reason || ""} - ${left}s</div></div>
       <button class="unblock" data-ip="${b.ip}">Unblock</button>
     </div>`;
   }).join("");
@@ -135,7 +156,7 @@ function updateMetrics(metrics) {
 async function fetchStatus() {
   const res = await fetch("/api/status");
   const data = await res.json();
-  state.flows = (data.recent || []).slice(0, 50);
+  state.flows = (data.recent || []).slice(0, MAX_FLOWS);
   state.lastTotal = data.total_flows || 0;
   renderFlows();
   renderBlocks(data.blocked || []);
@@ -180,11 +201,9 @@ socket.on("disconnect", () => {
   el.status.textContent = "offline";
   el.status.className = "status-dot offline";
 });
-socket.on("flow", (evt) => {
-  state.flows.unshift(evt);
-  state.flows = state.flows.slice(0, 50);
-  renderFlows();
-});
+socket.on("flows", ingestFlows);
+// Backward compat in case anything still emits a single "flow".
+socket.on("flow", (evt) => ingestFlows([evt]));
 socket.on("alert", (evt) => {
   toast(`${evt.type || "alert"} ${evt.ip || ""} ${evt.reason || ""}`.trim());
   document.querySelectorAll(`[data-src="${evt.ip}"]`).forEach((row) => row.classList.add("alert-row"));
